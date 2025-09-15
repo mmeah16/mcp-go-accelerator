@@ -6,7 +6,6 @@ This templates provides a Go-based accelerator for building Model Context Protoc
 
 - Example MCP tool implementations in Go
 - Docker support for local and cloud execution
-- Helm support for generating Kubernetes configuration files for use in CATS
 
 ## Get Started: Clone the Repository
 
@@ -88,22 +87,20 @@ See the syntax below for steps 1-3.
 ├── cmd/
 │ └── server/
 │   └── main.go # MCP tool server entry point
+│ └── cli/
+│   └── main.go # MCP CLI tools entry point
 ├── internal/
 │ └── handlers/
 │   └── handler.go # Define HTTP handlers with custom business logic for MCP tools
 ├── pkg/
+│ └── cli/
+│   ├── root.go # Initialize CLI tools entry point
+│   └── calculator.go # Define calulcator CLI tool
+│ └── logging/
+│   ├── logger.go # Define logging
 │ └── tools/
 │   ├── registry.go # Define MCP tool registry
 │   └── tools.go # Define core MCP tool logic
-├── helm/
-│ ├── values-cats.dev.yaml/ # Define CATS Dev variables
-│ ├── values-cats.dev.yaml/ # Define CATS Prod variables
-│ └── ... # Other Kubernetes scripts and files
-├── examples/ # Example MCP tool usage
-├── infra/
-│ ├── infra.go # (Optional) Infrastructure as code (CDK) to define services for tools to interact with
-│ ├── bootstrap-template.yaml
-│ └── ... # Other infra files
 ├── Dockerfile # Containerization support
 ├── Makefile # Define make commands
 ├── go.mod, go.sum # Go module files

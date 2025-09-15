@@ -9,6 +9,3 @@ build:
 
 run:
 	podman run -p 8080:8080 mcp-go-accelerator
-
-templates:
-	./helm/scripts/export.sh $(env)
