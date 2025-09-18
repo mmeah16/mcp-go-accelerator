@@ -1,0 +1,12 @@
+# Ignore Git metadata
+.git
+.gitignore
+
+# Ignore CDK output
+infra/cdk.out
+
+# Node modules (if any)
+node_modules
+
+# Logs
+*.log

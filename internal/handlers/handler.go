@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"context"
-	"mcp-go-accelerator/internal/models"
 	"fmt"
 	"log"
+	"mcp-go-accelerator/internal/models"
 	"time"
 
 	"github.com/google/uuid"
