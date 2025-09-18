@@ -2,10 +2,13 @@
 
 This templates provides a Go-based accelerator for building Model Context Protocol (MCP) tools and agents. It is designed to help you quickly develop and deploy tools for LLM and agentic integration scenarios.
 
+Special thank you to [Mark3Labs](https://github.com/mark3labs/mcp-go) for the incredible work on implementing an MCP server using Go and making this effort possible.
+
 ## Key Features
 
 - Example MCP tool implementations in Go
 - Docker support for local and cloud execution
+- **Note:** All the infrastructure code (ECS cluster, Fargate service, logging, security groups, etc.) lives in the [`infra/`](infra/) folder. For deployment details, see [`infra/README.md`](infra/README.md).
 
 ## Get Started: Clone the Repository
 
