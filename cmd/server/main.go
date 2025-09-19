@@ -1,51 +1,59 @@
 package main
 
 import (
-	"context"
 	"log"
+	"mcp-go-accelerator/pkg/logging"
+	"mcp-go-accelerator/pkg/tools"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"mcp-go-accelerator/pkg/logging"
-	"mcp-go-accelerator/pkg/tools"
-
 	"github.com/mark3labs/mcp-go/server"
 )
 
 func main() {
+
 	// Initialize components
 	logger := log.New(os.Stdout, "[MCP]", log.LstdFlags)
 
 	// Initialize middleware
 	loggingMiddleware := logging.NewLoggingMiddleware(logger)
 
-	// Create server with all features 
 	s := server.NewMCPServer("HTTP Server", "1.0.0",
-		server.WithToolHandlerMiddleware(loggingMiddleware.ToolMiddleware,
+			server.WithToolHandlerMiddleware(loggingMiddleware.ToolMiddleware,
 		),
 	)
+    tools.AddProductionTools(s)
+    // Create HTTP server with custom routes
+    mux := http.NewServeMux()
+    
+    // Add MCP endpoints
+    mux.Handle("/mcp", server.NewStreamableHTTPServer(s))
 
-	// Add tools to server
-	tools.AddProductionTools(s)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 
-	// Start server with graceful shutdown
-    startWithGracefulShutdown(s)
+    // Add middleware
+    handler := addMiddleware(mux)
+
+	log.Println("Starting custom StreamableHTTP server on :8080")
+	startServer(s, handler)
 
 }
 
-func startWithGracefulShutdown(s *server.MCPServer) {
+func startServer(s *server.MCPServer, handler http.Handler) {
 	sigChan := make(chan os.Signal, 1)
 
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	http := server.NewStreamableHTTPServer(s)
-
 	go func() {
 		log.Println("Starting server... run the inspector to test tools! 🛠️")
-		if err := http.Start(":8080"); err != nil {
-			log.Fatal("Failed to start server:", err)
+		if err := http.ListenAndServe(":8080", handler); err != nil {
+			log.Fatal(err)
 		}
 	}()
 
@@ -53,13 +61,12 @@ func startWithGracefulShutdown(s *server.MCPServer) {
 
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := http.Shutdown(ctx); err != nil {
-		log.Println("Failed to shutdown server:", err)
-	}
-
 	log.Println("Server stopped.")
+}
 
+func addMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        log.Printf("[%s] %s %s", time.Now().Format(time.RFC3339), r.Method, r.URL.Path)
+        next.ServeHTTP(w, r) 
+    })
 }
