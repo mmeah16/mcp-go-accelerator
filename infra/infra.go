@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/constructs-go/constructs/v10"
@@ -30,13 +31,24 @@ func NewInfraStack(scope constructs.Construct, id string, props *MCPStackProps) 
 		IsDefault: jsii.Bool(true),
 	})
 
-	// 2. Create the security group and ingress rule on 8080 from anywhere
-	securityGroup := awsec2.NewSecurityGroup(stack, jsii.String("SecurityGroup"), &awsec2.SecurityGroupProps{
+	// 2. Create the security groups for application load balancer with ingress rule on 8080 from anywhere and for Fargate service with ingress on ALB SG
+	albSecurityGroup := awsec2.NewSecurityGroup(stack, jsii.String("ALBSecurityGroup"), &awsec2.SecurityGroupProps{
 		Vpc: vpc,
+		SecurityGroupName: jsii.String("ALB-SG"),
+		Description: jsii.String("Security group enabling traffic from HTTP and HTTPS into MCP Server on Fargate"),
 	})
 
-	securityGroup.AddIngressRule(awsec2.Peer_AnyIpv4(), awsec2.Port_Tcp(jsii.Number(8080)), jsii.String("Allow access on port 8080 on all IP"), jsii.Bool(true))
+	albSecurityGroup.AddIngressRule(awsec2.Peer_AnyIpv4(), awsec2.Port_Tcp(jsii.Number(80)), jsii.String("Allow access on port 80 (HTTP) from all IP"), jsii.Bool(true))
+	albSecurityGroup.AddIngressRule(awsec2.Peer_AnyIpv4(), awsec2.Port_Tcp(jsii.Number(443)), jsii.String("Allow access on port 443 (HTTPS) from all IP"), jsii.Bool(true))
 	
+	fargateSecurityGroup := awsec2.NewSecurityGroup(stack, jsii.String("FargateSecurityGroup"), &awsec2.SecurityGroupProps{
+		Vpc: vpc,
+		SecurityGroupName: jsii.String("Fargate-MCP-Server-SG"),
+		Description: jsii.String("Security group enabling traffic from albSecurityGroup"),
+	})
+
+	fargateSecurityGroup.AddIngressRule(albSecurityGroup, awsec2.Port_Tcp(jsii.Number(8080)), jsii.String("Allow from ALB-SG"), jsii.Bool(true))
+
 	// 3. Create Log Group
 	logGroup := awslogs.NewLogGroup(stack, jsii.String("MCPLogGroup"), &awslogs.LogGroupProps{
 		LogGroupName: jsii.String("/ecs/mcp-service"),
@@ -87,13 +99,38 @@ func NewInfraStack(scope constructs.Construct, id string, props *MCPStackProps) 
 	})
 
 	// 8. Fargate Service
-	awsecs.NewFargateService(stack, jsii.String("MCPFargateService"), &awsecs.FargateServiceProps{
+	fargateService := awsecs.NewFargateService(stack, jsii.String("MCPFargateService"), &awsecs.FargateServiceProps{
 		Cluster: cluster,
 		TaskDefinition: fargateTaskDefintion,
 		DesiredCount: jsii.Number(1),
 		AssignPublicIp: jsii.Bool(true),
 		SecurityGroups: &[]awsec2.ISecurityGroup {
-			securityGroup,
+			fargateSecurityGroup,
+		},
+	})
+
+	// 9. Create ALB
+	alb := awselasticloadbalancingv2.NewApplicationLoadBalancer(stack, jsii.String("ALB"), &awselasticloadbalancingv2.ApplicationLoadBalancerProps{
+		Vpc: vpc,
+		InternetFacing: jsii.Bool(true),
+	})
+
+	listener := alb.AddListener(jsii.String("Listener"), &awselasticloadbalancingv2.BaseApplicationListenerProps{
+		Port: jsii.Number(80),
+		Open: jsii.Bool(true),
+	})
+
+	listener.AddTargets(jsii.String("ApplicationFleet"), &awselasticloadbalancingv2.AddApplicationTargetsProps{
+		Port: jsii.Number(8080),
+		Targets: &[]awselasticloadbalancingv2.IApplicationLoadBalancerTarget{
+			fargateService,
+		},
+		HealthCheck: &awselasticloadbalancingv2.HealthCheck{
+			Path: jsii.String("/health"),
+			Interval: awscdk.Duration_Seconds(jsii.Number(10)),
+			Timeout: awscdk.Duration_Seconds(jsii.Number(5)),
+			HealthyThresholdCount: jsii.Number(2),
+			UnhealthyThresholdCount: jsii.Number(5),
 		},
 	})
 
